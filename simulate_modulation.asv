@@ -1,0 +1,74 @@
+% BER vs SNR for BPSK in different channels
+clear; clc; close all;
+
+% Simulation parameters
+SNR_dB = 0:2:20;       % SNR range in dB
+numBits = 1e6;         % Number of bits for simulation
+modType = 'BPSK';      % Modulation scheme (BPSK)
+
+% Channel types to simulate
+channels = {'AWGN', 'Rayleigh', 'Rician'};
+lineStyles = {'-k', '--b', '-.r'};  % Line styles for each channel
+legendText = cell(1, length(channels));
+
+% Initialize BER matrix
+BER_results = zeros(length(channels), length(SNR_dB));
+
+% Simulate for each channel 
+for c = 1:length(channels)
+    ch = channels{c};
+    BER = simulate_modulation(modType, ch, SNR_dB, numBits);
+    BER_results(c, :) = BER;
+    legendText{c} = ch;
+end
+
+% Plot BER vs SNR
+figure;
+semilogy(SNR_dB, BER_results(1,:), lineStyles{1}, 'LineWidth', 2); hold on;
+semilogy(SNR_dB, BER_results(2,:), lineStyles{2}, 'LineWidth', 2);
+semilogy(SNR_dB, BER_results(3,:), lineStyles{3}, 'LineWidth', 2);
+hold off;
+
+grid on;
+xlabel('SNR (dB)');
+ylabel('Bit Error Rate (BER)');
+title(['BER Performance of BPSK in Different Channels']);
+legend(legendText, 'Location', 'southwest');
+
+% Set axis limits for better visualization
+axis([min(SNR_dB) max(SNR_dB) 1e-6 1]);
+
+% Function to simulate modulation (same as before)
+function BER = simulate_modulation(modType, channel, SNR_dB, numBits)
+    bits = randi([0 1], numBits, 1);  % Generate random bits
+    
+    % Modulate (BPSK)
+    symbols = 2*bits - 1;  % BPSK modulation: 0→-1, 1→+1
+    
+    BER = zeros(size(SNR_dB));
+    
+    for i = 1:length(SNR_dB)
+        % Apply channel
+        switch channel
+            case 'AWGN'
+                rxSymbols = awgn(symbols, SNR_dB(i), 'measured');
+                
+            case 'Rayleigh'
+                h = (randn(size(symbols)) + 1i*randn(size(symbols)))/sqrt(2);
+                rxSymbols = h.*symbols + awgn(zeros(size(symbols)), SNR_dB(i), 'measured');
+                
+            case 'Rician'
+                K = 3;  % Rician K-factor (3 = typical for moderate fading)
+                mean = sqrt(K/(K+1));
+                std_dev = sqrt(1/(2*(K+1)));
+                h = (mean + std_dev*randn(size(symbols))) + 1i*(mean + std_dev*randn(size(symbols)));
+                rxSymbols = h.*symbols + awgn(zeros(size(symbols)), SNR_dB(i), 'measured');
+        end
+        
+        % Demodulate (BPSK)
+        rxBits = real(rxSymbols) > 0;  % Simple threshold detection
+        
+        % Calculate BER
+        [~, BER(i)] = biterr(bits, rxBits);
+    end
+end
